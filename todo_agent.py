@@ -1,11 +1,15 @@
-import json
 import os
+import json
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 import pytz
 from autogen import ConversableAgent
 from task_model import Task, TaskStatus
 from claude_service import ClaudeService
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # Pacific timezone for consistent datetime handling
 pacific_tz = pytz.timezone('America/Los_Angeles')
@@ -179,8 +183,29 @@ class TodoAgent:
         return False
     
     def estimate_task_time(self, description: str) -> float:
-        """Estimate the time needed for a task using Claude"""
-        return self.claude_service.estimate_task_time(description)
+        
+        logger.info(f"Estimating time for task: '{description}'")
+        
+        context, generated_text, instructions, aimon_res = self.claude_service.estimate_task_time(description)
+        
+        try:
+            estimated = float(generated_text.strip())
+        except ValueError:
+            logger.warning(f"Claude returned non-numeric value: {generated_text}. Using default estimate of 1.0")
+            estimated = 1.0
+
+        ## IA reflection
+        try:
+            if aimon_res and aimon_res.detect_response:
+                results = aimon_res.detect_response.instruction_adherence["results"]
+                for result in results:
+                    if not result["adherence"]:
+                        logger.warning(f"Instruction not followed: {result['instruction']}")
+                        logger.info(f"Explanation: {result['detailed_explanation']}")
+        except Exception as e:
+            logger.error(f"Failed to process AIMon result: {e}")
+
+        return estimated
     
     def mark_task_complete(self, task_id: str) -> Optional[Task]:
         """Mark a task as completed"""
@@ -191,3 +216,15 @@ class TodoAgent:
         task.complete()
         self._save_tasks()
         return task 
+    
+    def reflect_on_estimate(self, description: str, estimated_hours: float, corrected_hours: Optional[float] = None):
+        """Reflect on whether Claude's time estimate was accurate based on user correction."""
+        if corrected_hours is not None:
+            logger.info(f"Reflection: User corrected time estimate for '{description}'.")
+            logger.info(f"Original estimate: {estimated_hours}, Corrected: {corrected_hours}")
+            
+            # Example logic: If off by >50%, maybe trigger a flag
+            error_ratio = abs(estimated_hours - corrected_hours) / max(corrected_hours, 0.1)
+            if error_ratio > 0.5:
+                logger.warning(f"Significant deviation detected in estimate for task: {description}")
+                # Optionally flag or adapt system (e.g., store for prompt tuning)

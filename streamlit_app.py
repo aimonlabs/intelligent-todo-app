@@ -420,83 +420,87 @@ def main():
         
         st.divider()
     
-    # Add new task input
-    st.subheader("Add New Task")
-    
-    # Task input with Enter key support
-    st.text_input("Task Description", key="new_task", placeholder="Enter task description and press Enter...", on_change=handle_enter)
-    
-    # Due date input - with no default selection
-    today = datetime.now(pacific_tz).date()
-    st.date_input("Due Date (Pacific)", key="due_date", 
-                 min_value=today, help="Task will be due at 11:59 PM Pacific time on this date", 
-                 value=None, label_visibility="visible")
-    
-    # Add button after date widget
-    st.button("➕ Add Task", on_click=add_task, use_container_width=True)
-    
-    # Task list with tabs for different statuses
-    st.subheader("Tasks")
-    tabs = st.tabs(["All", "Pending", "In Progress", "Completed"])
-    
-    # Get tasks for each tab
-    all_tasks = st.session_state.todo_agent.list_tasks()
-    pending_tasks = st.session_state.todo_agent.list_tasks(status="pending")
-    in_progress_tasks = []  # We're not using in_progress status in the new model
-    completed_tasks = st.session_state.todo_agent.list_tasks(status="completed")
-    
-    # Function to display tasks
-    def display_tasks(tasks, tab_name):
-        if not tasks:
-            st.info("No tasks to display")
-            return
-            
-        for idx, task in enumerate(tasks):
-            with st.container():
-                cols = st.columns([3, 1, 1, 1, 1])
-                
-                # Task info
-                cols[0].markdown(f"**{task.title}**  \n"
-                              f"Due: {task.due_date.strftime('%Y-%m-%d %H:%M')}  \n"
-                              f"Estimated time: {task.estimated_hours:.1f} hours  \n"
-                              f"Status: {'Completed' if task.completed else 'Pending'}")
-                
-                # Create unique keys for each button using tab name, index, and task ID segment
-                task_id_short = task.task_id[:8]  # Use first 8 chars of UUID
-                
-                # Edit button (pencil icon)
-                cols[1].button("✏️", key=f"{tab_name}_edit_{idx}_{task_id_short}", 
-                              help="Edit task", on_click=edit_task, args=(task.task_id,))
-                
-                # Complete button
-                if not task.completed:
-                    cols[2].button("✓", key=f"{tab_name}_complete_{idx}_{task_id_short}", 
-                                 help="Mark as complete", on_click=complete_task, args=(task.task_id,))
-                
-                # Start button (if not started)
-                if not task.completed:
-                    cols[3].button("▶️", key=f"{tab_name}_start_{idx}_{task_id_short}", 
-                                 help="Start task", on_click=start_task, args=(task.task_id,))
-                
-                # Delete button
-                cols[4].button("🗑️", key=f"{tab_name}_delete_{idx}_{task_id_short}", 
-                              help="Delete task", on_click=delete_task, args=(task.task_id,))
-            
-            st.divider()
-    
-    # Display tasks in each tab
-    with tabs[0]:
-        display_tasks(all_tasks, "all")
-    
-    with tabs[1]:
-        display_tasks(pending_tasks, "pending")
-    
-    with tabs[2]:
-        display_tasks(in_progress_tasks, "in_progress")
-    
-    with tabs[3]:
-        display_tasks(completed_tasks, "completed")
-    
+
+    st.subheader("📋 My Tasks (Grouped by Status)")
+
+    # Grouped task sections (Asana style)
+    task_groups = {
+        "🟡 Pending": st.session_state.todo_agent.list_tasks(status="pending"),
+        "🟢 In Progress": st.session_state.todo_agent.list_tasks(status="in_progress"),
+        "✅ Completed": st.session_state.todo_agent.list_tasks(status="completed"),
+    }
+
+    for label, tasks in task_groups.items():
+        with st.expander(label, expanded=True):
+            if not tasks:
+                st.info("No tasks in this section.")
+                continue
+
+            for idx, task in enumerate(tasks):
+                with st.container():
+                    cols = st.columns([4, 1, 1, 1, 1])
+                    cols[0].markdown(
+                        f"**{task.title}**  \n"
+                        f"📅 Due: {task.due_date.strftime('%Y-%m-%d %H:%M')}  \n"
+                        f"⏱️ Est: {task.estimated_hours:.1f} hrs"
+                    )
+                    task_id_short = task.task_id[:8]
+
+                    # Edit
+                    cols[1].button("✏️", key=f"edit_{label}_{idx}_{task_id_short}",
+                                on_click=edit_task, args=(task.task_id,), help="Edit task")
+
+                    # Complete
+                    if not task.completed:
+                        cols[2].button("✅", key=f"done_{label}_{idx}_{task_id_short}",
+                                    on_click=complete_task, args=(task.task_id,), help="Mark complete")
+
+                    # Start
+                    if not task.completed:
+                        cols[3].button("▶️", key=f"start_{label}_{idx}_{task_id_short}",
+                                    on_click=start_task, args=(task.task_id,), help="Start task")
+
+                    # Delete
+                    cols[4].button("🗑️", key=f"delete_{label}_{idx}_{task_id_short}",
+                                on_click=delete_task, args=(task.task_id,), help="Delete task")
+                st.divider()
+
+            # 2) Add-task slot at bottom of this section
+            slot_key = f"show_add_{label}"
+            if st.button("➕ Add a task…", key=f"toggle_{label}"):
+                st.session_state[slot_key] = not st.session_state.get(slot_key, False)
+
+            if st.session_state.get(slot_key, False):
+                with st.form(key=f"form_{label}"):
+                    new_desc = st.text_input("Task Description", key=f"desc_{label}")
+                    new_date = st.date_input("Due Date", key=f"date_{label}", min_value=datetime.now(pacific_tz).date())
+                    submit = st.form_submit_button("Submit")
+
+                    if submit:
+                        if not new_desc.strip():
+                            st.error("Task description cannot be empty")
+                        elif not new_date:
+                            st.error("Please select a due date")
+                        else:
+                            due_dt = datetime.combine(new_date, time(23, 59))
+                            due_pac = pacific_tz.localize(due_dt)
+
+                            with st.spinner("Estimating time with Claude..."):
+                                est_hours = st.session_state.todo_agent.estimate_task_time(new_desc)
+
+                            st.session_state.todo_agent.create_task(
+                                description=new_desc.strip(),
+                                due_date_str=due_pac.isoformat(),
+                                estimated_hours=est_hours
+                            )
+
+                            st.session_state.success_message = f"Added task with estimated time: {est_hours:.1f} hours"
+                            st.session_state.state_changed = True
+                            st.session_state[slot_key] = False
+                            st.rerun()
+
+
+
     # Check if state has changed and rerun if needed
     if st.session_state.get('state_changed', False):
         st.session_state.state_changed = False
