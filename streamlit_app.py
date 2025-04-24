@@ -256,23 +256,26 @@ def save_edited_task():
     """Save the edited task"""
     task = st.session_state.editing_task
     
-    # Get the updated description
+    # New values from form
     new_description = st.session_state.edit_description
     new_due_date = datetime.combine(st.session_state.edit_due_date, time(23, 59))
     new_due_date = pacific_tz.localize(new_due_date)
 
-    # If description changed, re-estimate time
+    now = datetime.now(pacific_tz)
+
+    # Estimate new time if description changed
     if new_description != task.description:
         with st.spinner("Re-estimating task time with Claude..."):
             estimated_hours = st.session_state.todo_agent.estimate_task_time(new_description)
-    ## Else in case of moving it back from past-due to in-progress
     else:
         estimated_hours = task.estimated_hours
 
-    ## Determine new status
-    now = datetime.now(pacific_tz)
-    new_status = task.status
-    if task.status == "past_due" and new_due_date > now:
+    # 👇 Derive status based on due date
+    if task.completed:
+        new_status = "completed"
+    elif new_due_date < now:
+        new_status = "past_due"
+    else:
         new_status = "in_progress"
 
     # Update the task
@@ -284,11 +287,9 @@ def save_edited_task():
         status=new_status
     )
 
-    # Clear editing state
+    # Clean up
     st.session_state.editing = False
     st.session_state.editing_task = None
-
-    # Feedback
     st.session_state.success_message = "Task updated"
     st.session_state.state_changed = True
     st.session_state.force_reflection_refresh = True
@@ -357,6 +358,8 @@ def main():
     st.title("Agentic TODO App")
     st.markdown("An intelligent TODO list with Claude-powered time estimation")
    
+    summary_container = st.container()
+
     # Show user email with option to change
     with st.expander("Email Settings"):
         st.write(f"Reminders will be sent to: **{st.session_state.user_email}**")
@@ -369,9 +372,6 @@ def main():
     if not st.session_state.overdue_checked:
         overdue_tasks()
         st.session_state.overdue_checked = True
-
-    # Daily summary + reflection
-    show_daily_summary()
 
     # Display success/error messages if any
     if 'success_message' in st.session_state:
@@ -524,6 +524,10 @@ def main():
                         st.session_state.state_changed = True
                         st.session_state[slot] = False
                         st.rerun()
+
+    # Daily summary
+    with summary_container:
+        show_daily_summary()
 
     # Check if state has changed and rerun if needed
     if st.session_state.get('state_changed', False):

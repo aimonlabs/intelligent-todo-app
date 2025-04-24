@@ -140,17 +140,31 @@
     "last_reminded": null
   },
   {
-    "task_id": "55c9f261-2866-4c24-80ee-8ad3456f39eb",
-    "title": "Walk the dog",
-    "description": "Walk the dog",
+    "task_id": "072cd895-f494-4b82-b1f0-1537eaf48b30",
+    "title": "Cook for 3 people",
+    "description": "Cook for 3 people",
     "due_date": "2025-04-24T23:59:00-07:00",
     "priority": null,
-    "estimated_hours": 0.5,
+    "estimated_hours": 1.5,
     "categories": [],
     "completed": false,
     "completed_date": null,
-    "created_date": "2025-04-24T19:09:39.841676+00:00",
-    "last_updated": "2025-04-24T19:09:39.841676+00:00",
+    "created_date": "2025-04-24T20:08:08.636011+00:00",
+    "last_updated": "2025-04-24T20:08:08.636011+00:00",
+    "last_reminded": null
+  },
+  {
+    "task_id": "ee24883a-ab33-4053-9fa3-2e9d6c91ddda",
+    "title": "Walk 15kms",
+    "description": "Walk 15kms",
+    "due_date": "2025-04-24T23:59:00-07:00",
+    "priority": null,
+    "estimated_hours": 3.75,
+    "categories": [],
+    "completed": false,
+    "completed_date": null,
+    "created_date": "2025-04-24T20:12:22.798763+00:00",
+    "last_updated": "2025-04-24T20:12:22.798763+00:00",
     "last_reminded": null
   }
 ]
