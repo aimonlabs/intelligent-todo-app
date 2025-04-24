@@ -110,5 +110,47 @@
     "created_date": "2025-04-19T07:53:55.455953+00:00",
     "last_updated": "2025-04-19T07:53:55.455953+00:00",
     "last_reminded": null
+  },
+  {
+    "task_id": "8b0fa8f2-a7fe-40f3-875a-b69fd8d1472b",
+    "title": "Wash the car.",
+    "description": "Wash the car.",
+    "due_date": "2025-04-24T23:59:00-07:00",
+    "priority": null,
+    "estimated_hours": 1.5,
+    "categories": [],
+    "completed": true,
+    "completed_date": "2025-04-24T19:12:15.393884+00:00",
+    "created_date": "2025-04-24T16:42:43.869783+00:00",
+    "last_updated": "2025-04-24T19:12:15.393884+00:00",
+    "last_reminded": null
+  },
+  {
+    "task_id": "caeff350-4360-47ab-9ce8-71626413660b",
+    "title": "Attend meetup",
+    "description": "Attend meetup",
+    "due_date": "2025-04-24T23:59:00-07:00",
+    "priority": null,
+    "estimated_hours": 2.0,
+    "categories": [],
+    "completed": true,
+    "completed_date": "2025-04-24T19:08:54.836323+00:00",
+    "created_date": "2025-04-24T18:57:37.507448+00:00",
+    "last_updated": "2025-04-24T19:08:54.836323+00:00",
+    "last_reminded": null
+  },
+  {
+    "task_id": "55c9f261-2866-4c24-80ee-8ad3456f39eb",
+    "title": "Walk the dog",
+    "description": "Walk the dog",
+    "due_date": "2025-04-24T23:59:00-07:00",
+    "priority": null,
+    "estimated_hours": 0.5,
+    "categories": [],
+    "completed": false,
+    "completed_date": null,
+    "created_date": "2025-04-24T19:09:39.841676+00:00",
+    "last_updated": "2025-04-24T19:09:39.841676+00:00",
+    "last_reminded": null
   }
 ]

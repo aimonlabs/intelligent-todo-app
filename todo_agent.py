@@ -120,25 +120,25 @@ class TodoAgent:
     def list_tasks(self, status: Optional[str] = None) -> List[Task]:
         """List all tasks, optionally filtered by status"""
         tasks = list(self.tasks.values())
-        
+        now = datetime.now(pacific_tz)
+
         if status:
-            if status == TaskStatus.COMPLETED.value:
+            if status == "completed":
                 tasks = [task for task in tasks if task.completed]
-            elif status == TaskStatus.PENDING.value:
-                tasks = [task for task in tasks if not task.completed]
-        
+            elif status == "in_progress":
+                tasks = [task for task in tasks if not task.completed and task.due_date >= now]
+            elif status == "past_due":
+                tasks = [task for task in tasks if not task.completed and task.due_date < now]
+
         # Ensure all datetimes are timezone-aware before sorting
         def get_due_date_for_sorting(task):
-            # If the datetime is naive (has no timezone info)
             if task.due_date and task.due_date.tzinfo is None:
-                # Localize it to Pacific timezone
                 return pacific_tz.localize(task.due_date)
             return task.due_date
-            
-        # Sort tasks by due date
+
         tasks.sort(key=get_due_date_for_sorting)
-        
         return tasks
+
     
     def get_task(self, task_id: str) -> Optional[Task]:
         """Get a task by ID"""
@@ -216,15 +216,6 @@ class TodoAgent:
         task.complete()
         self._save_tasks()
         return task 
-    
-    def reflect_on_estimate(self, description: str, estimated_hours: float, corrected_hours: Optional[float] = None):
-        """Reflect on whether Claude's time estimate was accurate based on user correction."""
-        if corrected_hours is not None:
-            logger.info(f"Reflection: User corrected time estimate for '{description}'.")
-            logger.info(f"Original estimate: {estimated_hours}, Corrected: {corrected_hours}")
-            
-            # Example logic: If off by >50%, maybe trigger a flag
-            error_ratio = abs(estimated_hours - corrected_hours) / max(corrected_hours, 0.1)
-            if error_ratio > 0.5:
-                logger.warning(f"Significant deviation detected in estimate for task: {description}")
-                # Optionally flag or adapt system (e.g., store for prompt tuning)
+
+    def reflect_on_day(self, tasks: list) -> str:
+        return self.claude_service.reflect_on_day(tasks)

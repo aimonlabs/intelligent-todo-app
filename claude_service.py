@@ -26,7 +26,8 @@ class ClaudeService:
         
         self.client = anthropic.Anthropic(api_key=self.api_key)
     
-    
+    ## Estimate task time
+
     @detect
     def estimate_task_time(self, task_description: str) -> float:
         
@@ -77,3 +78,48 @@ class ClaudeService:
             logger.warning(f"Failed to estimate task time: {e}")
             ## Fallback response
             return prompt, "1.0", instructions
+
+
+    ## Reflect on the day (generate summary)
+    def reflect_on_day(self, tasks: list) -> str:
+        
+        """
+        Ask Claude to reflect on the workload for the day and provide insights.
+        
+        Args:
+            tasks: List of Task objects scheduled for today
+        
+        Returns:
+            A human-readable insight summary
+        """
+
+        if not tasks:
+            return "No tasks today. You can relax or plan ahead."
+
+        task_list = "\n".join([f"- {t.description} ({t.estimated_hours:.1f} hrs)" for t in tasks])
+        
+        prompt = f"""
+                    You are a thoughtful productivity assistant helping users reflect on their workload.
+
+                    Here is a list of tasks scheduled for today:
+                    {task_list}
+
+                    Based on this, provide a short reflective summary (1-2 sentences) with suggestions if needed. Focus on feasibility, potential overload, or chunking large tasks.
+                """
+
+        try:
+            message = self.client.messages.create(
+                model="claude-3-opus-20240229",
+                max_tokens=100,
+                temperature=0.4,
+                system="You help people make sense of their daily task load and give human-like suggestions.",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return message.content[0].text.strip()
+
+        except Exception as e:
+            logger.warning(f"Failed to reflect on tasks: {e}")
+            return "Could not generate a reflection for today."
+        

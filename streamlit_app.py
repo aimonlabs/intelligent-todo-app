@@ -100,6 +100,14 @@ def initialize_app():
         
         # Flag to track state changes
         st.session_state.state_changed = False
+        
+        ## Expire tasks once per reload
+        if 'overdue_checked' not in st.session_state:
+            st.session_state.overdue_checked = False
+        ## Check reminder once per reload   
+        if 'reminders_checked' not in st.session_state:
+            st.session_state.reminders_checked = False
+
         st.session_state.initialized = True
 
 def email_setup_page():
@@ -140,6 +148,17 @@ def handle_enter():
     elif not st.session_state.due_date:
         st.session_state.error_message = "Please select a due date"
 
+def overdue_tasks():
+    """Move overdue uncompleted tasks to past_due."""
+    now = datetime.now(pacific_tz)
+    past_due = 0
+    for task in st.session_state.todo_agent.list_tasks(status="in_progress"):
+        if task.due_date < now and not task.completed:
+            st.session_state.todo_agent.update_task(task.task_id, status="past_due")
+            past_due += 1
+    if past_due:
+        st.success(f"{past_due} task(s) moved to Past Due.")
+
 def add_task():
     """Add a new task"""
     todo_description = st.session_state.new_task
@@ -164,11 +183,12 @@ def add_task():
     
     # Create the task with the Pacific timezone due date
     task = st.session_state.todo_agent.create_task(
-        description=todo_description,
-        due_date_str=due_date_pacific.isoformat(),
-        estimated_hours=estimated_hours
+    description=todo_description,
+    due_date_str=due_date_pacific.isoformat(),
+    estimated_hours=estimated_hours,
+    status="in_progress"  # explicitly set the initial status
     )
-    
+
     # Clear the inputs
     st.session_state.new_task = ""
     st.session_state.due_date = None  # Clear the date after adding a task
@@ -179,6 +199,10 @@ def add_task():
     # Set state changed flag
     st.session_state.state_changed = True
 
+    ## Force reflection
+    st.session_state.force_reflection_refresh = True
+    st.rerun()
+
 def delete_task(task_id):
     """Delete a task"""
     if st.session_state.todo_agent.delete_task(task_id):
@@ -186,6 +210,9 @@ def delete_task(task_id):
         st.session_state.success_message = "Task deleted"
         # Set state changed flag
         st.session_state.state_changed = True
+        ## Force reflection
+        st.session_state.force_reflection_refresh = True
+        st.rerun()
     else:
         st.session_state.error_message = "Failed to delete task"
 
@@ -196,6 +223,10 @@ def complete_task(task_id):
     st.session_state.success_message = "Task marked as complete"
     # Set state changed flag
     st.session_state.state_changed = True
+
+    ## Force reflection
+    st.session_state.force_reflection_refresh = True
+    st.rerun()
 
 def start_task(task_id):
     """Mark a task as in progress - note: our new model only has completed/not completed, 
@@ -227,32 +258,41 @@ def save_edited_task():
     
     # Get the updated description
     new_description = st.session_state.edit_description
-    
+    new_due_date = datetime.combine(st.session_state.edit_due_date, time(23, 59))
+    new_due_date = pacific_tz.localize(new_due_date)
+
     # If description changed, re-estimate time
     if new_description != task.description:
         with st.spinner("Re-estimating task time with Claude..."):
             estimated_hours = st.session_state.todo_agent.estimate_task_time(new_description)
-        
-        # Calculate new due date (current time + estimated time)
-        due_date = datetime.now() + timedelta(hours=estimated_hours)
-        
-        # Update the task
-        st.session_state.todo_agent.update_task(
-            task_id=task.task_id,
-            description=new_description,
-            due_date_str=due_date.isoformat(),
-            estimated_hours=estimated_hours
-        )
-    
+    ## Else in case of moving it back from past-due to in-progress
+    else:
+        estimated_hours = task.estimated_hours
+
+    ## Determine new status
+    now = datetime.now(pacific_tz)
+    new_status = task.status
+    if task.status == "past_due" and new_due_date > now:
+        new_status = "in_progress"
+
+    # Update the task
+    st.session_state.todo_agent.update_task(
+        task_id=task.task_id,
+        description=new_description,
+        due_date_str=new_due_date.isoformat(),
+        estimated_hours=estimated_hours,
+        status=new_status
+    )
+
     # Clear editing state
     st.session_state.editing = False
     st.session_state.editing_task = None
-    
-    # Success message
+
+    # Feedback
     st.session_state.success_message = "Task updated"
-    
-    # Set state changed flag
     st.session_state.state_changed = True
+    st.session_state.force_reflection_refresh = True
+    st.rerun()
 
 def cancel_edit():
     """Cancel the edit operation"""
@@ -260,78 +300,42 @@ def cancel_edit():
     st.session_state.editing_task = None
     st.session_state.state_changed = True
 
-def check_reminders():
-    """Check if any tasks need reminders"""
-    # Only check once every 30 seconds
-    current_time = time_module.time()
-    if current_time - st.session_state.last_check_time < 30:
-        return
-    
-    st.session_state.last_check_time = current_time
-    
-    # Get all pending tasks
-    tasks = st.session_state.todo_agent.list_tasks(status="pending")
-    
-    # Get current time in Pacific timezone to match the tasks
-    now = datetime.now(pacific_tz)
-    
-    # Use our reminder service to check for due tasks
-    reminder_service = st.session_state.reminder_service
-    
-    # Set the current user email if available
-    if hasattr(st.session_state, 'user_email'):
-        reminder_service.set_user_email(st.session_state.user_email)
-    
-    # Process reminders - this will check due tasks and send emails
-    reminders_sent = reminder_service.process_reminders(tasks)
-    
-    if reminders_sent > 0:
-        st.session_state.success_message = f"Sent {reminders_sent} task reminders"
-        st.session_state.state_changed = True
-    
-    # Also check for tasks that should be added to in-app notifications
-    for task in tasks:
-        # Ensure task due date has timezone info
-        if task.due_date.tzinfo is None:
-            task_due_date = pacific_tz.localize(task.due_date)
-        else:
-            task_due_date = task.due_date
-            
-        # Calculate when to remind (due date minus estimated time)
-        buffer_hours = max(4, task.estimated_hours * 1.5)  # At least 4 hours buffer or 1.5x estimated time
-        remind_at = task_due_date - timedelta(hours=buffer_hours)
-        
-        # Ensure remind_at has timezone info for comparison
-        if remind_at.tzinfo is None:
-            remind_at = pacific_tz.localize(remind_at)
-            
-        # If it's time to remind in-app (or past time)
-        if now >= remind_at:
-            # Check if we haven't already notified for this task
-            if task.task_id not in [n['id'] for n in st.session_state.notifications]:
-                # Generate a message
-                fun_message = f"Time to start on '{task.description}' - it's due soon!"
-                
-                # Add to notifications
-                st.session_state.notifications.append({
-                    'id': task.task_id,
-                    'description': task.description,
-                    'due_date': task_due_date,
-                    'estimated_hours': task.estimated_hours,
-                    'fun_message': fun_message
-                })
-                
-                # Update status to in_progress
-                with lock:
-                    st.session_state.todo_agent.update_task(task.task_id, status="in_progress")
-                
-                # Set state changed flag if any notifications were added
-                st.session_state.state_changed = True
-
 def dismiss_notification(notification_id):
     """Dismiss a notification"""
     st.session_state.notifications = [n for n in st.session_state.notifications if n['id'] != notification_id]
     st.session_state.state_changed = True
+
+def show_daily_summary():
+    today = datetime.now(pacific_tz).date()
+    todays_tasks = [
+        t for t in st.session_state.todo_agent.list_tasks(status="in_progress")
+        if t.due_date.date() == today and not t.completed
+    ]
+    
+    if todays_tasks:
+        total_hours = sum(t.estimated_hours or 0 for t in todays_tasks)
+        st.subheader("🗓️ Summary of Today's Tasks")
+        st.markdown(f"You have **{len(todays_tasks)}** task(s) today totaling **~{total_hours:.1f} hrs**.")
+        
+        cached_date = st.session_state.get("reflection_date")
+        cached_reflection = st.session_state.get("reflection_text")
+
+        if cached_date != today or st.session_state.get("force_reflection_refresh", False):
+            with st.spinner("Reflecting on today's workload..."):
+                try:
+                    reflection = st.session_state.todo_agent.reflect_on_day(todays_tasks)
+                except Exception:
+                    reflection = "⚠️ Could not generate reflection."
+            st.session_state.reflection_date = today
+            st.session_state.reflection_text = reflection
+            st.session_state.force_reflection_refresh = False
+        else:
+            reflection = cached_reflection
+
+        st.markdown("📘 **Daily Reflection**")
+        st.info(reflection)
+    else:
+        st.info("🎉 No tasks scheduled for today. Enjoy your time!")
 
 def main():
     # Set page config
@@ -352,7 +356,7 @@ def main():
     # Main app
     st.title("Agentic TODO App")
     st.markdown("An intelligent TODO list with Claude-powered time estimation")
-    
+   
     # Show user email with option to change
     with st.expander("Email Settings"):
         st.write(f"Reminders will be sent to: **{st.session_state.user_email}**")
@@ -361,9 +365,14 @@ def main():
             st.session_state.setup_complete = False
             st.experimental_rerun()
     
-    # Check for reminders
-    check_reminders()
-    
+    # Expire missed tasks
+    if not st.session_state.overdue_checked:
+        overdue_tasks()
+        st.session_state.overdue_checked = True
+
+    # Daily summary + reflection
+    show_daily_summary()
+
     # Display success/error messages if any
     if 'success_message' in st.session_state:
         st.success(st.session_state.success_message)
@@ -409,9 +418,15 @@ def main():
         # Input for task description
         st.text_input("Task Description", value=task.description, key="edit_description")
         
+        st.date_input(  "Due Date",
+                        value=task.due_date.date(),
+                        min_value=datetime.now(pacific_tz).date(),
+                        key="edit_due_date"
+        )
+
         # Current task details
         st.text(f"Current estimated time: {task.estimated_hours:.1f} hours")
-        st.text(f"Current due date: {task.due_date.strftime('%Y-%m-%d %H:%M')}")
+        st.text(f"Original due date: {task.due_date.strftime('%Y-%m-%d %H:%M')}")
         
         # Save/Cancel buttons
         col1, col2 = st.columns(2)
@@ -420,86 +435,95 @@ def main():
         
         st.divider()
     
+    st.subheader("📋 My Tasks")
 
-    st.subheader("📋 My Tasks (Grouped by Status)")
+    # ——— Task Category Navbar ———
+    task_category = st.radio("Choose Task Category:",
+                            ["🟢 In Progress", "✅ Completed", "🟡 Past Due"],
+                            horizontal=True,
+                        )
 
-    # Grouped task sections (Asana style)
-    task_groups = {
-        "🟡 Pending": st.session_state.todo_agent.list_tasks(status="pending"),
-        "🟢 In Progress": st.session_state.todo_agent.list_tasks(status="in_progress"),
-        "✅ Completed": st.session_state.todo_agent.list_tasks(status="completed"),
+    status_map = {
+    "🟢 In Progress": "in_progress",
+    "✅ Completed":   "completed",
+    "🟡 Past Due":    "past_due"
     }
 
-    for label, tasks in task_groups.items():
-        with st.expander(label, expanded=True):
-            if not tasks:
-                st.info("No tasks in this section.")
-                continue
+    selected_status = status_map[task_category]
 
-            for idx, task in enumerate(tasks):
-                with st.container():
-                    cols = st.columns([4, 1, 1, 1, 1])
-                    cols[0].markdown(
-                        f"**{task.title}**  \n"
-                        f"📅 Due: {task.due_date.strftime('%Y-%m-%d %H:%M')}  \n"
-                        f"⏱️ Est: {task.estimated_hours:.1f} hrs"
+    if selected_status == "in_progress":
+        tasks = [
+            t for t in st.session_state.todo_agent.list_tasks(status="in_progress")
+            if t.due_date >= datetime.now(pacific_tz)
+        ]
+    else:
+        tasks = st.session_state.todo_agent.list_tasks(status=selected_status)
+
+    with st.expander(task_category, expanded=True):
+        if not tasks:
+            st.info("No tasks in this section.")
+        for idx, task in enumerate(tasks):
+            cols = st.columns([4, 1, 1, 1])  # drop the "Start" column
+            cols[0].markdown(
+                f"**{task.description}**  \n"
+                f"📅 {task.due_date.strftime('%Y-%m-%d %H:%M')}  \n"
+                f"⏱️ {task.estimated_hours:.1f} hrs"
+            )
+            # Edit button
+            cols[1].button(
+                "✏️",
+                key=f"edit_{selected_status}_{idx}",
+                on_click=edit_task,
+                args=(task.task_id,),
+                help="Edit task"
+            )
+            # Complete button (only if not past_due and not already done)
+            if selected_status != "past_due" and not task.completed:
+                cols[2].button(
+                    "✅",
+                    key=f"done_{selected_status}_{idx}",
+                    on_click=complete_task,
+                    args=(task.task_id,),
+                    help="Mark complete"
+                )
+            # Delete button in last column
+            cols[3].button(
+                "🗑️",
+                key=f"del_{selected_status}_{idx}",
+                on_click=delete_task,
+                args=(task.task_id,),
+                help="Delete task"
+            )
+            st.divider()
+
+        # ——— Add New Task Form ———
+        if selected_status != "past_due":
+            slot = f"show_add_{selected_status}"
+            if st.button("➕ Add a task…", key=f"toggle_{selected_status}"):
+                st.session_state[slot] = not st.session_state.get(slot, False)
+            if st.session_state.get(slot, False):
+                with st.form(key=f"form_{selected_status}"):
+                    nd = st.text_input("Task Description", key=f"desc_{selected_status}")
+                    dd = st.date_input(
+                        "Due Date",
+                        key=f"date_{selected_status}",
+                        min_value=datetime.now(pacific_tz).date()
                     )
-                    task_id_short = task.task_id[:8]
-
-                    # Edit
-                    cols[1].button("✏️", key=f"edit_{label}_{idx}_{task_id_short}",
-                                on_click=edit_task, args=(task.task_id,), help="Edit task")
-
-                    # Complete
-                    if not task.completed:
-                        cols[2].button("✅", key=f"done_{label}_{idx}_{task_id_short}",
-                                    on_click=complete_task, args=(task.task_id,), help="Mark complete")
-
-                    # Start
-                    if not task.completed:
-                        cols[3].button("▶️", key=f"start_{label}_{idx}_{task_id_short}",
-                                    on_click=start_task, args=(task.task_id,), help="Start task")
-
-                    # Delete
-                    cols[4].button("🗑️", key=f"delete_{label}_{idx}_{task_id_short}",
-                                on_click=delete_task, args=(task.task_id,), help="Delete task")
-                st.divider()
-
-            # 2) Add-task slot at bottom of this section
-            slot_key = f"show_add_{label}"
-            if st.button("➕ Add a task…", key=f"toggle_{label}"):
-                st.session_state[slot_key] = not st.session_state.get(slot_key, False)
-
-            if st.session_state.get(slot_key, False):
-                with st.form(key=f"form_{label}"):
-                    new_desc = st.text_input("Task Description", key=f"desc_{label}")
-                    new_date = st.date_input("Due Date", key=f"date_{label}", min_value=datetime.now(pacific_tz).date())
-                    submit = st.form_submit_button("Submit")
-
-                    if submit:
-                        if not new_desc.strip():
-                            st.error("Task description cannot be empty")
-                        elif not new_date:
-                            st.error("Please select a due date")
-                        else:
-                            due_dt = datetime.combine(new_date, time(23, 59))
-                            due_pac = pacific_tz.localize(due_dt)
-
-                            with st.spinner("Estimating time with Claude..."):
-                                est_hours = st.session_state.todo_agent.estimate_task_time(new_desc)
-
-                            st.session_state.todo_agent.create_task(
-                                description=new_desc.strip(),
-                                due_date_str=due_pac.isoformat(),
-                                estimated_hours=est_hours
-                            )
-
-                            st.session_state.success_message = f"Added task with estimated time: {est_hours:.1f} hours"
-                            st.session_state.state_changed = True
-                            st.session_state[slot_key] = False
-                            st.rerun()
-
-
+                    ok = st.form_submit_button("Submit")
+                    if ok:
+                        dt = datetime.combine(dd, time(23, 59))
+                        dt_p = pacific_tz.localize(dt)
+                        with st.spinner("Estimating time…"):
+                            hrs = st.session_state.todo_agent.estimate_task_time(nd)
+                        st.session_state.todo_agent.create_task(
+                            description=nd.strip(),
+                            due_date_str=dt_p.isoformat(),
+                            estimated_hours=hrs
+                        )
+                        st.session_state.success_message = f"Added: {hrs:.1f} hrs"
+                        st.session_state.state_changed = True
+                        st.session_state[slot] = False
+                        st.rerun()
 
     # Check if state has changed and rerun if needed
     if st.session_state.get('state_changed', False):
