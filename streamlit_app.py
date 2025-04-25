@@ -418,10 +418,12 @@ def main():
         # Input for task description
         st.text_input("Task Description", value=task.description, key="edit_description")
         
-        st.date_input(  "Due Date",
-                        value=task.due_date.date(),
-                        min_value=datetime.now(pacific_tz).date(),
-                        key="edit_due_date"
+        current_date = datetime.now(pacific_tz).date()
+        st.date_input(
+            "Due Date",
+            value=task.due_date.date(),
+            min_value=min(current_date, task.due_date.date()),
+            key="edit_due_date"
         )
 
         # Current task details
