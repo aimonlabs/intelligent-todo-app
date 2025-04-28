@@ -80,11 +80,11 @@ class ClaudeService:
             return prompt, "1.0", instructions
 
 
-    ## Reflect on the day (generate summary)
-    def reflect_on_day(self, tasks: list) -> str:
+    ## Generate summary for the day 
+    def summarize_the_day(self, tasks: list) -> str:
         
         """
-        Ask Claude to reflect on the workload for the day and provide insights.
+        Ask Claude to summarize the workload for the day and provide insights.
         
         Args:
             tasks: List of Task objects scheduled for today
@@ -99,12 +99,12 @@ class ClaudeService:
         task_list = "\n".join([f"- {t.description} ({t.estimated_hours:.1f} hrs)" for t in tasks])
         
         prompt = f"""
-                    You are a thoughtful productivity assistant helping users reflect on their workload.
+                    You are a thoughtful productivity assistant helping users summzarize their workload for the day.
 
                     Here is a list of tasks scheduled for today:
                     {task_list}
 
-                    Based on this, provide a short reflective summary (1-2 sentences) with suggestions if needed. Focus on feasibility, potential overload, or chunking large tasks.
+                    Based on this, provide a short summary (1-2 sentences) with suggestions if needed. Focus on feasibility, potential overload, or chunking large tasks.
                 """
 
         try:
@@ -120,5 +120,5 @@ class ClaudeService:
             return message.content[0].text.strip()
 
         except Exception as e:
-            logger.warning(f"Failed to reflect on tasks: {e}")
-            return "Could not generate a reflection for today."
+            logger.warning(f"Failed to summarize on tasks: {e}")
+            return "Could not generate a summary for today."

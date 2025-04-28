@@ -147,8 +147,8 @@ def add_task():
     # Set state changed flag
     st.session_state.state_changed = True
 
-    ## Force reflection
-    st.session_state.force_reflection_refresh = True
+    ## Force summary
+    st.session_state.force_summary_refresh = True
     # st.rerun()
 
 def delete_task(task_id):
@@ -158,8 +158,8 @@ def delete_task(task_id):
         st.session_state.success_message = "Task deleted"
         # Set state changed flag
         st.session_state.state_changed = True
-        ## Force reflection
-        st.session_state.force_reflection_refresh = True
+        ## Force summary
+        st.session_state.force_summary_refresh = True
         # st.rerun()
     else:
         st.session_state.error_message = "Failed to delete task"
@@ -172,8 +172,8 @@ def complete_task(task_id):
     # Set state changed flag
     st.session_state.state_changed = True
 
-    ## Force reflection
-    st.session_state.force_reflection_refresh = True
+    ## Force summary
+    st.session_state.force_summary_refresh = True
     # st.rerun()
 
 def start_task(task_id):
@@ -240,7 +240,7 @@ def save_edited_task():
     st.session_state.editing_task = None
     st.session_state.success_message = "Task updated"
     st.session_state.state_changed = True
-    st.session_state.force_reflection_refresh = True
+    st.session_state.force_summary_refresh = True
     # st.rerun()
 
 def cancel_edit():
@@ -263,26 +263,26 @@ def show_daily_summary():
     
     if todays_tasks:
         total_hours = sum(t.estimated_hours or 0 for t in todays_tasks)
-        st.subheader("🗓️ Summary of Today's Tasks")
+        # st.subheader("🗓️ Overview for the day")
         st.markdown(f"You have **{len(todays_tasks)}** task(s) today totaling **~{total_hours:.1f} hrs**.")
         
-        cached_date = st.session_state.get("reflection_date")
-        cached_reflection = st.session_state.get("reflection_text")
+        cached_date = st.session_state.get("summary_date")
+        cached_summary = st.session_state.get("summary_text")
 
-        if cached_date != today or st.session_state.get("force_reflection_refresh", False):
-            with st.spinner("Reflecting on today's workload..."):
+        if cached_date != today or st.session_state.get("force_summary_refresh", False):
+            with st.spinner("Summarizing today's workload..."):
                 try:
-                    reflection = st.session_state.todo_agent.reflect_on_day(todays_tasks)
+                    summary = st.session_state.todo_agent.summarize_the_day(todays_tasks)
                 except Exception:
-                    reflection = "⚠️ Could not generate reflection."
-            st.session_state.reflection_date = today
-            st.session_state.reflection_text = reflection
-            st.session_state.force_reflection_refresh = False
+                    summary = "⚠️ Could not generate summary."
+            st.session_state.summary_date = today
+            st.session_state.summary_text = summary
+            st.session_state.force_summary_refresh = False
         else:
-            reflection = cached_reflection
+            summary = cached_summary
 
-        st.markdown("📘 **Daily Reflection**")
-        st.info(reflection)
+        st.markdown("📘 **Overview for the day**")
+        st.info(summary)
     else:
         st.info("🎉 No tasks scheduled for today. Enjoy your time!")
 
@@ -433,8 +433,8 @@ def main():
                         st.session_state.state_changed = True
                         st.session_state[slot] = False
 
-                        ## Force reflection
-                        st.session_state.force_reflection_refresh = True
+                        ## Force summary
+                        st.session_state.force_summary_refresh = True
                         # st.rerun()
 
     # Daily summary

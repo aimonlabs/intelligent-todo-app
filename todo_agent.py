@@ -194,7 +194,7 @@ class TodoAgent:
             logger.warning(f"Claude returned non-numeric value: {generated_text}. Using default estimate of 1.0")
             estimated = 1.0
 
-        ## IA reflection
+        ## IA Reflection
         try:
             if aimon_res and aimon_res.detect_response:
                 results = aimon_res.detect_response.instruction_adherence["results"]
@@ -217,5 +217,5 @@ class TodoAgent:
         self._save_tasks()
         return task 
 
-    def reflect_on_day(self, tasks: list) -> str:
-        return self.claude_service.reflect_on_day(tasks)
+    def summarize_the_day(self, tasks: list) -> str:
+        return self.claude_service.summarize_the_day(tasks)

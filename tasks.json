@@ -28,17 +28,31 @@
     "last_reminded": null
   },
   {
-    "task_id": "081d4bed-9d8d-4a8d-9d37-bc3bc52a0f3b",
-    "title": "Clean the dishes.",
-    "description": "Clean the dishes.",
+    "task_id": "33ae59c8-6308-4b14-8e3a-db0d01820d67",
+    "title": "Make coffee",
+    "description": "Make coffee",
     "due_date": "2025-04-28T23:59:00-07:00",
     "priority": null,
-    "estimated_hours": 0.5,
+    "estimated_hours": 0.1,
     "categories": [],
     "completed": false,
     "completed_date": null,
-    "created_date": "2025-04-28T16:11:24.709787+00:00",
-    "last_updated": "2025-04-28T16:11:24.709787+00:00",
+    "created_date": "2025-04-28T17:36:09.454570+00:00",
+    "last_updated": "2025-04-28T17:36:09.454570+00:00",
+    "last_reminded": null
+  },
+  {
+    "task_id": "fa0a906e-2f7f-48b1-a59d-2f7a9a289c6c",
+    "title": "Do laundry",
+    "description": "Do laundry",
+    "due_date": "2025-04-28T23:59:00-07:00",
+    "priority": null,
+    "estimated_hours": 1.5,
+    "categories": [],
+    "completed": false,
+    "completed_date": null,
+    "created_date": "2025-04-28T17:36:29.278972+00:00",
+    "last_updated": "2025-04-28T17:36:29.278972+00:00",
     "last_reminded": null
   }
 ]
