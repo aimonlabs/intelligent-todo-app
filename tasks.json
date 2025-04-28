@@ -1,0 +1,44 @@
+[
+  {
+    "task_id": "bbe2246e-a167-4483-a7db-ef1c0f97ce86",
+    "title": "Buy flowers.",
+    "description": "Buy flowers.",
+    "due_date": "2025-04-25T23:59:00-07:00",
+    "priority": null,
+    "estimated_hours": 0.5,
+    "categories": [],
+    "completed": false,
+    "completed_date": null,
+    "created_date": "2025-04-25T17:18:47.374411+00:00",
+    "last_updated": "2025-04-25T17:18:47.374411+00:00",
+    "last_reminded": null
+  },
+  {
+    "task_id": "eae0154d-331a-474d-982d-c59994b8fbf1",
+    "title": "Cook Pasta",
+    "description": "Cook Pasta",
+    "due_date": "2025-04-28T23:59:00-07:00",
+    "priority": null,
+    "estimated_hours": 0.5,
+    "categories": [],
+    "completed": true,
+    "completed_date": "2025-04-28T15:41:47.626218+00:00",
+    "created_date": "2025-04-28T15:30:22.676942+00:00",
+    "last_updated": "2025-04-28T15:41:47.626218+00:00",
+    "last_reminded": null
+  },
+  {
+    "task_id": "081d4bed-9d8d-4a8d-9d37-bc3bc52a0f3b",
+    "title": "Clean the dishes.",
+    "description": "Clean the dishes.",
+    "due_date": "2025-04-28T23:59:00-07:00",
+    "priority": null,
+    "estimated_hours": 0.5,
+    "categories": [],
+    "completed": false,
+    "completed_date": null,
+    "created_date": "2025-04-28T16:11:24.709787+00:00",
+    "last_updated": "2025-04-28T16:11:24.709787+00:00",
+    "last_reminded": null
+  }
+]
