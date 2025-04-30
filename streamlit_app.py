@@ -367,6 +367,8 @@ def main():
         ]
     else:
         tasks = st.session_state.todo_agent.list_tasks(status=selected_status)
+    
+    tasks.sort(key=lambda x: x.created_date, reverse=True)
 
     with st.expander(task_category, expanded=True):
         if not tasks:
