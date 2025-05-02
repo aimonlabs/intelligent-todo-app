@@ -1,15 +1,13 @@
 import os
 import json
+import pytz
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
-import pytz
 from autogen import ConversableAgent
+from typing import Dict, List, Optional
 from task_model import Task, TaskStatus
 from claude_service import ClaudeService
-
-from aimon import Detect
-from aimon.decorators.detect import DetectResult
+from reflection_agent import reflection_agent
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -22,19 +20,6 @@ class TodoAgent:
         self.storage_path = storage_path
         self.tasks: Dict[str, Task] = self._load_tasks()
         self.claude_service = ClaudeService(api_key=claude_api_key)
-        
-        self.aimon = Detect(values_returned=["context", "generated_text", "instructions"],
-                            config={"instruction_adherence": {"detector_name": "default"}},
-                            api_key=os.getenv("AIMON_API_KEY"),
-                            application_name="todo_agent",
-                            model_name="claude_api_model",
-                            publish=True,
-                        )
-        @self.aimon
-        def reflect_with_aimon(context, generated_text, instructions):
-            return context, generated_text, instructions
-
-        self._reflect = reflect_with_aimon
 
         # Set up AG2 agent
         self.agent = ConversableAgent(
@@ -200,35 +185,37 @@ class TodoAgent:
     
     def estimate_task_time(self, description: str) -> float:
         
-        ## Claude prompt && response
         context, response_text = self.claude_service.estimate_task_time(description)
-
-        ## Define instructions
-        instructions = [
-            "Respond only with a numeric value (e.g., 1.5).",
-            "Do not include the word 'hours' or any units.",
-            "Do not include any explanation, description, or justification.",
-        ]
-
-        ## Parse estimated time
         try:
             estimated_time = float(response_text.strip())
         except ValueError:
-            ## Fallback
-            logger.warning(f"Claude returned non-numeric value: {response_text}. Defaulting to 1.0")
+            logger.warning(f"Non‑numeric from Claude: {response_text!r}, defaulting to 1.0")
             estimated_time = 1.0
 
-        ## Reflect with AIMon
-        try:
-            _, _, _, aimon_res = self._reflect(context, response_text, instructions)
-            adherence = aimon_res.detect_response.instruction_adherence
-            for result in adherence.get("instructions_list", []):
-                if not result.get("label", True):
-                    logger.warning(f"Instruction not followed: {result['instruction']}")
-                    logger.info(f"Explanation: {result.get('explanation', 'No explanation')}")
-        except Exception as e:
-            logger.error(f"AIMon reflection failed: {e}")
-                
+        # Call AIMon via AG2’s execute_function
+        
+        func_call = {
+            "name": "check_instruction_adherence",
+            "arguments": json.dumps({
+                "context": context,
+                "generated_text": response_text,
+                "instructions": [
+                    "Respond only with a numeric value (e.g., 1.5).",
+                    "Do not include the word 'hours' or any units.",
+                    "Do not include any explanation, description, or justification."
+                ]
+            })
+        }
+
+        ok, tool_response = reflection_agent.execute_function(func_call)
+        if ok:
+            data = json.loads(tool_response["content"])
+            for issue in data.get("issues", []):
+                logger.warning(f"AIMon flagged: {issue['instruction']}")
+                logger.info(f"Explanation: {issue['explanation']}")
+        else:
+            logger.error(f"AIMon tool failed to run: {tool_response}")
+
         return estimated_time
     
     def mark_task_complete(self, task_id: str) -> Optional[Task]:
