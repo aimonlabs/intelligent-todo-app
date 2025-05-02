@@ -2,23 +2,13 @@ import os
 import anthropic
 from typing import Optional
 
-from aimon import Detect
 import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-## AIMon decorator for instruction adherence
-detect = Detect(
-    values_returned=["context", "generated_text", "instructions"],
-    config={"instruction_adherence": {"detector_name": "default"}},
-    api_key=os.getenv("AIMON_API_KEY"),
-    application_name="todo_agent",
-    model_name="claude_api_model",
-    publish=True
-)
-
 class ClaudeService:
+    
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not self.api_key:
@@ -27,58 +17,38 @@ class ClaudeService:
         self.client = anthropic.Anthropic(api_key=self.api_key)
     
     ## Estimate task time
-
-    @detect
-    def estimate_task_time(self, task_description: str) -> float:
-        
+    def estimate_task_time(self, task_description: str) -> tuple[str, str]:
         """
-        Use Claude to estimate how many hours a task might take based on its description.
-        
-        Args:
-            task_description: Description of the task
-            
-        Returns:
-            Estimated hours to complete the task
+        Estimate how many hours a task might take.
+        Returns (prompt, response_text)
         """
-
+        
         prompt = f"""
-        You are a time estimation assistant. Your job is to estimate how long a task takes for an average person.
+                    You are a time estimation assistant. Your job is to estimate how long a task takes for an average person.
 
-        Respond **only with a number**, in decimal hours (e.g., 1.5 means 1 hour and 30 minutes). 
-        Do not include any explanation or context. Do not write units or words like 'hours'.
+                    Respond **only with a number**, in decimal hours (e.g., 1.5 means 1 hour and 30 minutes).
+                    Do not include any explanation or context. Do not write units or words like 'hours'.
 
-        Task: {task_description}
+                    Task: {task_description}
+
+                    Estimated hours:
+                """
         
-        Estimated hours:
-        """
-
-        instructions = [
-            "1. Respond only with a numeric value (e.g., 1.5).",
-            "2. Do not include the word 'hours' or any units.",
-            "3. Do not include any explanation, description, or justification."
-        ]
-
         try:
-
-            message = self.client.messages.create(
+            msg = self.client.messages.create(
                 model="claude-3-opus-20240229",
                 max_tokens=50,
                 temperature=0.0,
                 system="You are a helpful assistant that estimates how long tasks take to complete. Respond only with the number of hours.",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+                messages=[{"role": "user", "content": prompt}],
             )
-        
-            response_text = message.content[0].text.strip()
+            response_text = msg.content[0].text.strip()
             logger.debug(f"Claude raw response: {response_text}")
-            return prompt, response_text, instructions
-        
+            return prompt, response_text
+
         except Exception as e:
             logger.warning(f"Failed to estimate task time: {e}")
-            ## Fallback response
-            return prompt, "1.0", instructions
-
+            return prompt, "1.0"
 
     ## Generate summary for the day 
     def summarize_the_day(self, tasks: list) -> str:
