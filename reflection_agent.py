@@ -18,7 +18,7 @@ class AIMonReflectionAgent(ConversableAgent):
         ## Configure the AIMon decorator
         self.detector = Detect(
             values_returned=["context", "generated_text", "instructions"],
-            config={"instruction_adherence": {"detector_name": "default"}},
+            config={"instruction_adherence": {"detector_name": "default", "explain": "negatives_only",}},
             api_key=os.getenv("AIMON_API_KEY"),
             application_name="todo_agent",
             model_name="claude_api_model",

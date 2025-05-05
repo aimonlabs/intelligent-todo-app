@@ -1,7 +1,9 @@
 import os
+import io
 import json
 import pytz
 import logging
+import contextlib
 from datetime import datetime
 from autogen import ConversableAgent
 from typing import Dict, List, Optional
@@ -183,40 +185,78 @@ class TodoAgent:
             return True
         return False
     
+
     def estimate_task_time(self, description: str) -> float:
         
-        context, response_text = self.claude_service.estimate_task_time(description)
-        try:
-            estimated_time = float(response_text.strip())
-        except ValueError:
-            logger.warning(f"Non‑numeric from Claude: {response_text!r}, defaulting to 1.0")
-            estimated_time = 1.0
+        """
+        Ask Claude for a numeric estimate, then validate it with ReflectionAgent.
+        Retry 1 time if AIMon flags deviations from instructions.
+        """
 
-        # Call AIMon via AG2’s execute_function
-        
-        func_call = {
-            "name": "check_instruction_adherence",
-            "arguments": json.dumps({
+        max_retries = 1
+
+        instructions = [
+            "Respond only with a numeric value (e.g., 1.5).",
+            "Do not include the word 'hours' or any units.",
+            "Do not include any explanation, description, or justification.",
+            "Keep the numeric value under 3.0"
+        ]
+
+        prompt = description
+
+        for attempt in range(max_retries + 1):
+            
+            print()
+            logger.debug(f"[Attempt {attempt + 1}] Estimating time for task: {description!r}")
+            context, response_text = self.claude_service.estimate_task_time(prompt)
+            logger.debug(f"Claude response: {response_text!r}")
+
+            payload = json.dumps({
                 "context": context,
                 "generated_text": response_text,
-                "instructions": [
-                    "Respond only with a numeric value (e.g., 1.5).",
-                    "Do not include the word 'hours' or any units.",
-                    "Do not include any explanation, description, or justification."
-                ]
+                "instructions": instructions
             })
-        }
 
-        ok, tool_response = reflection_agent.execute_function(func_call)
-        if ok:
-            data = json.loads(tool_response["content"])
-            for issue in data.get("issues", []):
-                logger.warning(f"AIMon flagged: {issue['instruction']}")
-                logger.info(f"Explanation: {issue['explanation']}")
-        else:
-            logger.error(f"AIMon tool failed to run: {tool_response}")
+            ## Mute AG2’s internal tool output just for this call
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    tool_response = reflection_agent.execute_function({
+                        "name": "check_instruction_adherence",
+                        "arguments": payload
+                    })
 
-        return estimated_time
+                result = json.loads(tool_response[1]["content"]) if tool_response[0] else {"issues": [{"error": "tool_failed"}]}
+                issues = result.get("issues", [])
+
+                if issues:
+                    print()
+                    logger.warning(f"AIMon flagged {len(issues)} issue(s) for task: {description!r}")
+                    for issue in issues:
+                        logger.warning(f"→ Instruction: {issue.get('instruction')}")
+                        logger.warning(f"  Reason: {issue.get('explanation')}")
+                else:
+                    logger.info(f"No instruction violations for task: {description!r}")
+
+            except Exception as e:
+                logger.error(f"Reflection check failed: {e}")
+                issues = [{"error": "parse_failed"}]
+
+            if not issues:
+                try:
+                    return float(response_text.strip())
+                except ValueError as ve:
+                    logger.error(f"Could not parse response to float: {response_text!r} — {ve}")
+                    break
+
+            ## Retry with stricter prompt
+            prompt = (
+                f"{description}\n\n"
+                "PLEASE ONLY OUTPUT a numeric estimate value of less than 3. "
+                "No text, units, or commentary."
+            )
+
+        logger.warning(f"Max retries reached. Defaulting to 1.0 for task: {description!r}")
+        return 1.0
     
     def mark_task_complete(self, task_id: str) -> Optional[Task]:
         """Mark a task as completed"""
