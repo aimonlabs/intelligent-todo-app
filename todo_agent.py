@@ -199,7 +199,7 @@ class TodoAgent:
             "Respond only with a numeric value (e.g., 1.5).",
             "Do not include the word 'hours' or any units.",
             "Do not include any explanation, description, or justification.",
-            "Keep the numeric value under 3.0"
+            "Keep the numeric value in the range 0 to 4.0"
         ]
 
         prompt = description
